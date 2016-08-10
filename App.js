@@ -4,7 +4,7 @@
  * @flow
  */
 
-import React, { Component } from 'react';
+import React, {Component, Children, createElement, PropTypes} from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,10 +12,30 @@ import {
   Navigator
 } from 'react-native';
 
-function Main({navigator}) {
-  const pushContent = ()=>navigator.push({
-    name: 'Content',
-  });
+class NavigatorProvider extends Component {
+  getChildContext() {
+    return {
+      navigator: this.props.navigator
+    }
+  }
+  render() {
+    return Children.only(this.props.children)
+  }
+}
+NavigatorProvider.childContextTypes = {navigator: PropTypes.any}
+
+const withNavigator = (mapNavigator) => (BaseComponent) => {
+  class WithNavigator extends Component {
+    render() {
+      const actions = mapNavigator(this.context.navigator);
+      return createElement(BaseComponent, {...this.props, ...actions})
+    }
+  }
+  WithNavigator.contextTypes = {navigator: PropTypes.any}
+  return WithNavigator
+}
+
+function Main({pushContent}) {
   return (
     <View style={styles.fullCenter}>
       <Text style={styles.textCenter}>Main View</Text>
@@ -24,8 +44,11 @@ function Main({navigator}) {
   )
 }
 
-function Content({navigator}) {
-  const back = navigator.pop
+const MainWithNav = withNavigator(n=> ({
+  pushContent: ()=>n.push({name: 'Content'})
+}))(Main)
+
+function Content({back}) {
   return (
     <View style={[styles.fullCenter, {backgroundColor: 'gray'}]}>
       <Text style={styles.textCenter}>Content View</Text>
@@ -34,22 +57,33 @@ function Content({navigator}) {
   );
 }
 
+const ContentWithNav = withNavigator(n=>({
+  back: n.pop
+}))(Content)
+
 export default class NavigatorApp extends Component {
   render() {
     return (
       <Navigator
         style={styles.fullCenter}
         initialRoute={{name: 'Main'}}
-        renderScene={this.renderScene}
+        renderScene={(r,n)=>this.renderScene(r, n)}
       />
     );
   }
   renderScene(route, navigator) {
+    return (
+      <NavigatorProvider navigator={navigator}>
+        {this.elementForScene(route)}
+      </NavigatorProvider>
+    )
+  }
+  elementForScene(route) {
     if (route.name === 'Main') {
-      return <Main navigator={navigator}/>
+      return <MainWithNav />
     }
     if (route.name === 'Content') {
-      return <Content navigator={navigator}/>
+      return <ContentWithNav />
     }
   }
 }
